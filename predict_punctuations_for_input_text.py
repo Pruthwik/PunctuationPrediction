@@ -30,14 +30,17 @@ def write_text_into_file(text, file_path):
 def format_text_into_conll(text, max_length=25):
     """Format the input text into conll so that it can be used for crf prediction."""
     tokens_in_text = text.split()
-    conll_lines = list()
+    conll_lines_cased = list()
+    conll_lines_lower_cased = list()
     count = 0
     for token in tokens_in_text:
         if count > 0 and count % max_length == 0:
-            conll_lines.append('')
-        conll_lines.append(token.lower())
+            conll_lines_cased.append('')
+            conll_lines_lower_cased.append('')
+        conll_lines_lower_cased.append(token.lower())
+        conll_lines_cased.append(token)
         count += 1
-    return conll_lines
+    return conll_lines_cased, conll_lines_lower_cased
 
 
 def place_punctuations_in_text(predictions):
@@ -63,13 +66,18 @@ def main():
     args = parser.parse_args()
     input_text = read_text_from_file(args.inp)
     input_file_name = args.inp[: args.inp.find('.')]
-    conll_lines = format_text_into_conll(input_text)
-    write_lines_into_file(conll_lines, input_file_name + '-conll.txt')
-    os.system('crf_test -m ' + args.model + ' ' + input_file_name + '-conll.txt' + ' > ' + input_file_name + '-preds.txt')
-    predictions = read_lines_from_file(input_file_name + '-preds.txt')
+    conll_lines_cased, conll_lines_lower_cased = format_text_into_conll(input_text)
+    write_lines_into_file(conll_lines_lower_cased, input_file_name + '-lower-conll.txt')
+    write_lines_into_file(conll_lines_cased, input_file_name + '-conll.txt')
+    os.system('crf_test -m ' + args.model + ' ' + input_file_name + '-lower-conll.txt' + ' > ' + input_file_name + '-preds.txt')
+    os.system('cut -f2 ' + input_file_name + '-preds.txt > ' + input_file_name + '-only-preds.txt')
+    os.system('paste ' + input_file_name + '-conll.txt ' + input_file_name + '-only-preds.txt > ' + input_file_name + '-cased-preds.txt')
+    predictions = read_lines_from_file(input_file_name + '-cased-preds.txt')
     punctuated_text = place_punctuations_in_text(predictions)
+    if punctuated_text[-1] != '.':
+        punctuated_text += ' .'
     write_text_into_file(punctuated_text, args.out)
-    os.system('rm -rf ' + input_file_name + '-conll.txt' + ' ' + input_file_name + '-preds.txt')
+    os.system('rm -rf ' + input_file_name + '*-conll.txt' + ' ' + input_file_name + '*-preds.txt')
 
 
 if __name__ == '__main__':
